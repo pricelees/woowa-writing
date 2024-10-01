@@ -33,7 +33,7 @@
 > **파란색 선은 클라이언트**(프론트엔드), **빨간색 선은 서버**(백엔드), **초록색 선은 FCM 서버**에 해당됩니다.
 >
 
-![fcm_흐름도](level4-image/fcm_flow.png)
+![fcm_흐름도](https://github.com/pricelees/woowa-writing/blob/level4/level4-image/fcm_flow.png)
 
 FCM 토큰은 **앱 인스턴스**마다 고유한데요, 쉽게 말하면 같은 기기라도 서로 다른 환경(앱, 웹, 혹은 서로 다른 브라우저..)에 개별적인 토큰이 발급됩니다. 즉 같은 회원이 여러 개의 FCM 토큰을 가질 수 있습니다.
 
@@ -52,7 +52,7 @@ FCM 토큰은 **앱 인스턴스**마다 고유한데요, 쉽게 말하면 같�
 
 우선 FCM 프로젝트를 생성하고, 해당 프로젝트 설정 → 서비스 계정 탭에 들어가서 **새 비공개 키 생성** 버튼을 눌러 JSON 파일을 받은 뒤 프로젝트 경로로 옮겨주세요. 저는 `src/main/resources/firebase/serviceAccountKey.json` 에 저장하겠습니다.
 
-![sample_code](level4-image/fcm_sample_code.png)
+![sample_code](https://github.com/pricelees/woowa-writing/blob/level4/level4-image/fcm_sample_code.png)
 
 파일을 옮겼으면 이제 FirebaseApp을 실행하는 코드를 작성해주면 되는데요, 위 코드는 FCM에서 제공하는 코드이고 이 코드를 바탕으로 FirebaseApp 초기화 코드를 작성해 보겠습니다.
 
@@ -133,7 +133,7 @@ log.info("InputStream: {}", serviceAccount);
 
 예시를 위해 필드는 최대한 간단하게만 넣어볼게요.
 
-![ERD](level4-image/fcm_erd.png)
+![ERD](https://github.com/pricelees/woowa-writing/blob/level4/level4-image/fcm_erd.png)
 
 ERD를 그려보면 위 처럼 나오고, 이를 JPA의 Entity로 구성하면 다음과 같습니다.
 
@@ -561,7 +561,7 @@ public void sendMulticastMessage(List<String> tokens) {
 
 실제로 1000개의 토큰으로 테스트를 했을 때, 100배 이상의 시간 차이가 나는 것을 확인할 수 있었습니다.
 
-![sending_test](level4-image/sending_test_result.png)
+![sending_test](https://github.com/pricelees/woowa-writing/blob/level4/level4-image/sending_test_result.png)
 
 따라서, **단일 토큰이 확정적인 상황이 아니라면 가급적 MulticastMessage를 이용하는 것이 유리**하고 저도 아래에서 다룰 예외 처리는 사용하고 있는 MulticastMessage에 대해서만 작성하겠습니다.
 
