@@ -1,12 +1,11 @@
 # Springboot와 Firebase를 이용하여 웹 알림 구현하기
 
-안녕하세요. 우아한테크코스 6기 백엔드 상돌(이상진) 입니다.
+특정 서비스를 만들 때 가장 중요한 것 중 하나는 **알림 기능**인 것 같습니다. 
 
-현재 저희 프로젝트 팀(모우다 팀)이 개발하고 있는 **모임을 만드는 서비스**는 모임의 성사를 돕기 위해 모임 생성, 댓글, 채팅 등의 기능을 제공하고 있습니다.
+프로젝트 기간동안 **하나의 모임을 성사시키는 서비스**(=모우다)를 만들었는데, 모든 기능이 정상적으로 작동해도 사용자가 이를 모른다면 아무 의미가 없을 것이기에 **알림 기능**은 꼭 필요한 기능이었습니다.  
 
-하지만 이런 기능들이 있다고 해도 **사용자들이 이를 인지하지 못하면 큰 의미가 없다**는 생각으로 **푸시 알림 기능**을 추가하기로 결정했, 특히 이번 프로젝트는 프론트엔드 개발자들과의 프로젝트이기에 웹 푸시 알림을 구현하였습니다.
+이번 글에서는 모우다 서비스의 웹 알림 기능 구현에 사용한 **Firebase Cloud Message**(이하 FCM)를 소개하고, **백엔드에서의 구현 방법**을 간단한 예시 코드와 함께 살펴보겠습니다.
 
-이번 글에서는 이를 구현하는데 사용된 **Firebase Cloud Message**(이하 FCM)과, 이를 백엔드에서 적용하는 방법을 간단한 예시 코드와 함께 살펴보겠습니다.
 
 > 본문에 작성된 코드는 실제 모우다 서비스의 코드가 아닌 예시를 위해 간단하게 작성한 코드입니다.
 예시 코드는 설명이 목적이므로 추상화, 메서드 분리 등의 과정을 적용하지 않고 가급적 풀어서 작성하였습니다.
@@ -24,7 +23,7 @@
 2. **무료 전송**: 유료로 제공되는 기능도 있지만, 서비스의 초기 단계인 지금은 무료 버전으로도 충분히 구현할 수 있습니다.
 3. **크로스 플랫폼**: FCM은 **웹 뿐만 아니라 IOS, Android도 지원**합니다. 따라서 추후에 모바일로 확장하기에도 유리합니다.
 
-여기에 구현 자체가 간단하고, 공식 문서가 잘 되어있다는 장점도 있었습니다. 실제로 본문에서 다루는 모든 구현 과정은 모두 공식 문서만을 활용했습니다.😄
+여기에 **구현 자체가 간단하고, 공식 문서가 잘 되어있다는 장점**도 있었습니다. 실제로 본문에서 다루는 모든 구현 과정은 모두 공식 문서만을 활용했습니다.😄
 
 ### 구조
 
@@ -35,14 +34,18 @@
 
 ![fcm_흐름도](https://github.com/pricelees/woowa-writing/blob/level4/level4-image/fcm_flow.png)
 
-FCM 토큰은 **앱 인스턴스**마다 고유한데요, 쉽게 말하면 같은 기기라도 서로 다른 환경(앱, 웹, 혹은 서로 다른 브라우저..)에 개별적인 토큰이 발급됩니다. 즉 같은 회원이 여러 개의 FCM 토큰을 가질 수 있습니다.
+FCM 토큰은 **앱 인스턴스**마다 고유하다고 하는데요, 여기서의 앱 인스턴스는 하나의 애플리케이션에 해당됩니다.
+
+즉 웹 푸시 알림의 경우를 생각하면 같은 기기라도 서로 다른 브라우저마다 각각의 토큰이 부여되고, 따라서 한 명의 회원이 여러 개의 FCM 토큰을 발급받을 수 있습니다. 
 
 이 과정대로라면 백엔드 서버에서 할 일은 다음과 같습니다.
 
-1. 클라이언트가 토큰을 보내면 **사용자 정보와 함께 DB에 저장**하는 API를 만든다.
+1. 클라이언트가 토큰을 보내면 **사용자 정보와 함께 데이터베이스에 저장**하는 API를 만든다.
 2. 특정 이벤트(모임 생성, 댓글, 채팅)에 대한 처리를 하고, 이 이벤트에 대한 알림을 받을 회원의 토큰을 조회한다.
 3. 사용자에게 보낼 알림 메시지 정보를 생성하고, 2에서 조회한 토큰과 함께 FCM 서버에 메시지 전송 요청을 보낸다.
 4. DB에 저장된 토큰을 관리한다.
+
+간단하게 요약하면, `클라이언트가 토큰을 보낸 이후부터 사용자가 알림 메시지를 받을 때 까지의 모든 과정`을 백엔드에서 진행한다고 생각하시면 됩니다.
 
 이제 위 내용을 바탕으로 Springboot에서의 토큰 관리, 메시지 전송, 예외 핸들링에 대해 작성해 보겠습니다.
 
@@ -54,7 +57,7 @@ FCM 토큰은 **앱 인스턴스**마다 고유한데요, 쉽게 말하면 같�
 
 ![sample_code](https://github.com/pricelees/woowa-writing/blob/level4/level4-image/fcm_sample_code.png)
 
-파일을 옮겼으면 이제 FirebaseApp을 실행하는 코드를 작성해주면 되는데요, 위 코드는 FCM에서 제공하는 코드이고 이 코드를 바탕으로 FirebaseApp 초기화 코드를 작성해 보겠습니다.
+파일을 옮겼으면 이제 FirebaseApp 을 실행하는 코드를 작성해주면 되는데요, 위에 있는 FCM 에서 제공하는 코드를 바탕으로 초기화 코드를 작성해 보겠습니다. 
 
 ```java
 @Component
@@ -119,7 +122,7 @@ log.info("InputStream: {}", serviceAccount);
 
 이에 따라 FCM에서는 다음을 권장합니다.
 
-1. 서버에서 FCM 토큰과 타임스탬프를 저장한다.
+1. 서버에서 **FCM 토큰과 타임스탬프**를 저장한다.
 2. 사용자 접속 시 타임스탬프를 업데이트하고, 비활성화된 토큰은 삭제한다.
 
 저는 이 권장사항에 따라, DB에 토큰과 타임스탬프를 저장하고 한 달이 경과된 토큰은 자동으로 삭제하도록 하겠습니다.
@@ -214,7 +217,7 @@ public class UserEntity {
 }
 ```
 
-User의 경우 도메인과 엔티티를 나눠서 설계했습니다. UserEntity에 OneToMany를 넣어줘도 되지만, 단방향 구현으로도 충분할 것 같아 일단 지정하지 않았습니다.
+회원 정보는 최대한 간단하게 계정 필드만 넣어서 구성했습니다. OneToMany로 양방향 매핑을 할 수도 있지만, 회원을 조회할 때 반드시 토큰까지 조회 할 이유는 없다고 생각해서 일단 단방향으로 구성하였습니다. 
 
 이제 토큰을 등록하는 API를 만들어 보겠습니다.
 
@@ -283,7 +286,7 @@ public class FCMTokenService {
 
 ### 토큰 비활성화 / 만료된 토큰 제거
 
-등록된 토큰을 조회한 뒤 lastUpdated 필드를 확인하고, 한 달이 지났다면 비활성화 / 비활성화 이후 270일이 경과한 경우에는 삭제하는 코드를 작성해 보겠습니다. 다른 방법들도 있지만 저는 **@Scheduled**를 사용했습니다.
+등록된 토큰을 조회한 뒤 lastUpdated 필드를 확인하여 한 달이 지났다면 비활성화하고, 비활성화 이후 270일이 경과한 경우에는 삭제하는 코드를 작성해 보겠습니다. 다른 방법들도 있지만 저는 **@Scheduled**를 사용했습니다.
 
 ```java
 @Scheduled(cron = "0 0 0 1 * ?")
@@ -299,7 +302,7 @@ private void deactiveOrDelete(FcmTokenEntity tokenEntity) {
         return;
     }
     if (tokenEntity.isInactive()) {
-		    tokenEntity.refresh();
+        tokenEntity.refresh(); // 날짜 최신화
         tokenEntity.deactivate();
         fcmTokenRepository.save(tokenEntity);
     }
@@ -308,7 +311,7 @@ private void deactiveOrDelete(FcmTokenEntity tokenEntity) {
 
 저는 **매월 1일**에 확인할 예정이기에 `cron = 0 0 0 1 * ?`  으로 지정하였습니다. 토큰이 만료된 경우 삭제하고, 토큰이 갱신된지 한 달 이상이라면 비활성화 상태로 지정합니다.
 
-여기서 주의할 점은 토큰 만료는 **비활성화 상태에서 270일** 이므로 토큰을 비활성화 하더라도 날짜는 최신으로 업데이트를 해줘야 합니다!
+토큰의 만료(expire)는 비활성화된 날짜 기준으로 270일이 경과한 경우이기에, 토큰을 비활성화 하더라도 날짜는 최신으로 업데이트를 해줘야 합니다!
 
 여기까지 하면 토큰에 대한 설정은 끝났고, 이제 메시지를 보내는 과정을 다뤄보겠습니다.
 
@@ -316,15 +319,18 @@ private void deactiveOrDelete(FcmTokenEntity tokenEntity) {
 
 ### 개요
 
-메시지 전송은 크게 단일 토큰을 담아 전송 / 여러 개의 토큰을 배치로 묶어서 전송 / 특정 토픽을 이용하여 전송하는 방법으로 나뉩니다. 저는 토픽을 제외한 나머지 두 방법에 대해서만 다뤄보겠습니다.
+메시지 전송은 크게 **단일 토큰을 담아 전송** / **여러 개의 토큰을 배치로 묶어서 전송** / **특정 토픽을 이용하여 전송**하는 방법으로 나뉩니다. 저는 토픽을 제외한 나머지 두 방법에 대해서만 다뤄보겠습니다.
 
 > 토픽의 등록 및 관리는 [공식 문서- 토픽 등록](https://firebase.google.com/docs/cloud-messaging/manage-topics?hl=ko)에서, [전송은 공식 문서 - 주제로 메시지 전송](https://firebase.google.com/docs/cloud-messaging/send-message?hl=ko#send-messages-to-topics)에서 확인하실 수 있습니다.
 >
 
+> 토픽은 하나의 FCM 서비스당 2,000개까지만 등록이 가능하여, 저희 서비스에서는 2,000개의 토큰은 부족할 것이라 판단하여 사용하지 않았습니다. 
+>
+
 우선, 자바에서 FCM 알림 전송을 요청하는 과정을 요약하면 다음과 같습니다.
 
-1. Firebase에서 제공하는 **Message 객체(배치 전송은 MulticastMessage)**를 만든다.
-2. **FirebaseMessaging.getInstance()**로 FirebaseMessaging 인스턴스를 생성한다.
+1. Firebase 에서 제공하는 **Message 객체(배치 전송은 MulticastMessage)** 를 만든다.
+2. **FirebaseMessaging.getInstance()** 로 FirebaseMessaging 인스턴스를 생성한다.
 3. 1에서 만든 객체를 2에서 얻은 인스턴스의 **send**(단일 전송) / **sendEachForMulticast**(배치 전송)에 담아 호출한다.
 
 그러면 전송을 하기 전에 우선 Message 객체에 대해 살펴봐야겠네요. 우선 Message 객체를 간단하게 확인해 보겠습니다.
@@ -376,7 +382,7 @@ private void deactiveOrDelete(FcmTokenEntity tokenEntity) {
 }
 ```
 
-제목 / 내용 / 알림에 표시되는 이미지(URL) 로 이루어진 **모든 플랫폼에서 사용할 기본 알림 템플릿 객체**입니다.
+**제목 / 내용 / 알림에 표시되는 이미지(URL)** 로 이루어진 **모든 플랫폼에서 사용할 기본 알림 템플릿 객체**입니다.
 
 이 객체의 내용은 모든 플랫폼에 적용되며, 특정 플랫폼마다의 Notification을 지정할 수도 있습니다.
 
@@ -406,7 +412,7 @@ Notification notification = Notification.builder()
 }
 ```
 
-모든 플랫폼에 적용되는 FCM 옵션이고, Notification과 마찬가지로 각 플랫폼마다의 별도의 fcm_options가 존재합니다.
+모든 플랫폼에 적용되는 FCM 옵션이고, Notification과 마찬가지로 각 플랫폼마다의 별도의 fcm_options이 존재합니다.
 
 저는 웹 푸시 알림에서의 설정인 WebpushFcmOptions를 생성해볼텐데, 여기서의 link는 알림 클릭시 열리는 링크입니다.
 
@@ -524,7 +530,9 @@ BatchResponse의 구성은 위와 같고, 단일 전송과 다른 점은 **실�
 
 ### MulticastMessage
 
-MulticastMessage는 메시지를 여러 사용자(토큰)에게 보낼 때 사용할 수 있고, 한 개의 MulticastMessage 객체에는 **최대 500개의 토큰**을 ****담을 수 있습니다**.** 따라서, MulticastMessage를 보내기 위해서는 우선 **토큰을 500개 단위로 쪼개주는 작업**이 필요합니다. 코드는 아래와 같이 작성할 수 있습니다.
+MulticastMessage는 메시지를 여러 사용자(토큰)에게 보낼 때 사용할 수 있고, 한 개의 MulticastMessage 객체에는 **최대 500개의 토큰**을 담을 수 있습니다. 
+
+따라서, MulticastMessage를 보내기 위해서는 우선 **토큰을 500개 단위로 쪼개주는 작업**이 필요한데요, 코드는 아래와 같이 작성할 수 있습니다.
 
 ```java
 private List<List<String>> partitionTokensByBatch(List<String> tokens) {
@@ -536,7 +544,7 @@ private List<List<String>> partitionTokensByBatch(List<String> tokens) {
 }
 ```
 
-주의하실 점은 MulticastMessage 전송에는 **최소 1개의 토큰이 포함**되어야 하는데요, 따라서 아래와 같이 불필요한 작업을 피하기 위해, 미리 토큰이 비어있는 경우에 대해 처리를 할 수 있습니다.
+주의하실 점은 MulticastMessage 전송에는 **최소 1개의 토큰이 포함**되어야 하는데요, 따라서 불필요한 작업을 피하기 위해, 아래 코드와 같이 토큰이 비어있는 경우는 바로 종료하도록 할 수 있습니다. 
 
 ```java
 public void sendMulticastMessage(List<String> tokens) {
@@ -569,10 +577,10 @@ public void sendMulticastMessage(List<String> tokens) {
 
 메시지 전송에 실패하면 FirebaseMessagingException이 발생합니다. 이 예외는 `MessagingErrorcode` 라는 에러 코드 Enum을 가지고 있는데요, Enum에 있는 각 예외 코드에 대한 설명은 [공식 문서](https://firebase.google.com/docs/reference/fcm/rest/v1/ErrorCode?hl=ko)에서 확인하실 수 있습니다.
 
-이전 코드에서는 작성하지 않았지만 send 또는 sendEachForMulticast는 **throws 또는 try-catch를 이용한 예외 처리가 필요**한데요, ****자세히 작성하면 분량이 꽤나 길어져서 간단한 가이드라인만 제시 해 보겠습니다.
+이전 코드에서는 작성하지 않았지만 send 또는 sendEachForMulticast는 **throws 또는 try-catch를 이용한 예외 처리가 필요**한데요, 자세히 작성하면 분량이 꽤나 길어져서 간단한 가이드라인만 제시 해 보겠습니다.
 
 1. 위에서 간단하게 작성했는데, 토큰에 문제가 있으면 **UNREGISTERED** 라는 에러 코드로 응답합니다. 에러 코드가 이 코드이면 토큰을 삭제하겠습니다.
-2. [재시도 처리 공식문서](https://firebase.google.com/docs/cloud-messaging/scale-fcm?hl=ko#handling-retries)에서 제안하는 방법대로, 429와 500 오류에 대해서는 재시도합니다.
+2. [재시도 처리 공식문서](https://firebase.google.com/docs/cloud-messaging/scale-fcm?hl=ko#handling-retries)에서 제안하는 방법대로, 429와 500번대 오류가 발생하면 재시도합니다.
 
 ### BatchResponse
 
@@ -583,7 +591,7 @@ public void sendMulticastMessage(List<String> tokens) {
 2. getSuccessCount(), getFailureCount()를 통해 성공 / 실패 횟수를 알 수 있습니다.
 3. getResponses() 를 통해 List<SendResponse>를 얻을 수 있고, SendResponse안에는 개별 메시지의 id와 예외 발생시의 예외 정보가 들어있습니다.
 
-이제 이 정보들을 통해 예외 핸들링을 진행 해 보겠습니다.
+이제 BatchResponse를 이용한 예외 처리 과정을 본격적으로 다뤄보겠습니다. 
 
 ### 예외 핸들링
 
@@ -641,7 +649,10 @@ private boolean isRemovable(SendResponse sendResponse) {
 }
 ```
 
-응답의 에러 코드를 확인한 뒤, UNREGISTERED인 토큰을 찾아 제거하는 코드입니다. 응답에 해당되는 토큰을 꺼내기 위해 IntStream을 이용하여 인덱스로 루프를 돌려야 합니다.
+응답의 에러 코드를 확인한 뒤, UNREGISTERED 인 토큰을 찾아 제거하는 코드입니다. 응답에 해당되는 토큰을 꺼내기 위해 IntStream 을 이용하여 인덱스로 루프를 돌려야 합니다.
+
+> IntStream을 사용할 때는 주의가 필요합니다. List<String>에서 토큰을 지우거나 하는 과정으로 BatchResponse.getResponses()와 갯수가 불일치하는 경우 예외가 발생할 수 있습니다. 
+> 
 
 ```java
 private void sendAllRetryableTokens(List<SendResponse> responses, List<String> tokens) {
@@ -651,6 +662,7 @@ private void sendAllRetryableTokens(List<SendResponse> responses, List<String> t
 ```
 
 재시도 처리는 MessagingErrorCode가 429(QUOTA_EXCEEDED) 일 때와 INTERNAL(500) / UNAVAILABLE(503)인 경우로 나눌 수 있습니다. 토큰 분류는 이전에 토큰을 삭제할 때 했던 방법과 동일합니다.
+재시도 처리는 내용이 많기도 하고, 이는 기능 구현보다는 기능 고도화에 가깝다고 생각하여 간단한 가이드만 작성해 보겠습니다.
 
 1. 429 에러인 경우 retry-after 헤더에 있는 시간 뒤에 재시도 요청을 보내고, 값이 없으면 기본값은 60초입니다.
 
@@ -673,16 +685,17 @@ retry-after 값은 `SendResponse`  객체에 위 코드를 적용하여 얻을 �
 )
 ```
 
-지수 백오프 방법은 **Spring Retry**를 통해 구현할 수 있고, 자세한 내용은 [공식 문서](https://github.com/spring-projects/spring-retry)를 참고해주세요.
-
-재시도 처리 코드는 알림과 무관한 내용이 많아 가이드라인만 작성하였습니다. 위 방법은 Firebase에서 제시하는 방법이고, 각자의 운영 환경에 알맞게 설정하시면 됩니다.
+지수 백오프 방법은 **Spring Retry**나 ScheduledExecutorService를 이용하여 구현할 수 있습니다! 
 
 ## 마무리
 
 이번 글에서는 FCM과 토큰 관리, 메시지 전송, 그리고 예외 처리에 대해 알아보았습니다.
 
-알림 기능을 빠르게 구현하고자 한다면 메시지 전송 부분만 참고하시면 됩니다. 알림은 구현 자체만 보면 어렵지는 않으나, “잘” 보내기 위해서는 수많은 고민이 필요합니다. 이 글에서 다룬 토큰 관리, 예외 처리도 그렇고 트랜잭션, 이벤트별 전송 전략, 의존성, 동기 / 비동기 등의 애플리케이션 자체에 대한 고민도 필요합니다.
+알림 기능을 빠르게 구현하고자 한다면 메시지 전송 부분만 참고하시면 됩니다. 알림은 구현 자체만 보면 어렵지는 않으나, `잘` 보내기 위해서는 수많은 고민이 필요합니다. 이 글에서 다룬 토큰 관리, 예외 처리도 그렇고 **트랜잭션, 이벤트별 전송 전략, 의존성, 동기 / 비동기** 등의 애플리케이션 자체에 대한 고민도 필요합니다.
 
-따라서 처음부터 모든 것을 고려하면서 설계하기보단, 알림 기능 자체를 우선적으로 구현한 뒤 점진적으로 개선하시는 것을 추천드리고, 이 글이 초기의 기능 구현에 도움이 되면 좋겠습니다.
+사용자가 많거나, 사용자가 적어도 수 많은 알림을 보내는 상황이 아니라면 예외 처리와 같은 부분은 생략하고 실제 전송 부분만 구현한 뒤 고도화하는 과정을 거치는게 더 의미가 있다고 생각합니다.
 
-긴 글 읽어주셔서 감사드립니다. 따뜻한 연말 보내세요!
+> 저희 서비스에서는 초창기 알림 기능을 도입할 때 알림 전송에 실패해도 기존 비즈니스 로직은 유지(=트랜잭션 커밋)하는 정도도 구현하지 않고, 가장 기본적인 전송 기능만 구현했음에도 알림에서의 예외가 거의 발생하지 않았습니다!
+> 
+
+이 글이 초기의 알림 기능 구현에 도움이 되었으면 좋겠습니다. 긴 글 읽느라 고생하셨습니다. 감사합니다!
