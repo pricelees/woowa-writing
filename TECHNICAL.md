@@ -489,7 +489,7 @@ String response = FirebaseMessaging.getInstance().send(message);
 
 Message 객체는, 이전에 만든 객체들에 setToken()으로 단일 토큰을 지정하여 전송합니다. 전송에 성공하면 문자열 응답을 보내주는데, 응답은 `projects/{project_id}/messages/{message_id}` 형식으로 이루어져 있습니다.
 
-1. **MulticastMessage 객체 생성 및 전송**
+2. **MulticastMessage 객체 생성 및 전송**
 
 ```java
 List<String> tokens = new ArrayList<>();
@@ -503,9 +503,9 @@ MulticastMessage message = MulticastMessage.builder()
 BatchResponse response = FirebaseMessaging.getInstance().sendEachForMulticast(message);
 ```
 
-MulticastMessage 객체는 **List<String> 에 담긴 모든 토큰**을 **addAllTokens()**로 추가하는 것 이외에는 Message와 동일합니다. ( +  addToken()을 반복 사용하여 하나씩 추가 할 수도 있습니다! )
+MulticastMessage 객체는 **List<String> 에 담긴 모든 토큰**을 **addAllTokens()** 로 추가하는 것 이외에는 Message와 동일합니다. ( +  addToken()을 반복 사용하여 하나씩 추가 할 수도 있습니다! )
 
-전송은 **sendEachForMulticast()**에 MulticastMessage를 담아 호출하며, **BatchResponse** 객체를 반환합니다.
+전송은 **sendEachForMulticast()** 에 MulticastMessage 를 담아 호출하며, **BatchResponse** 객체를 반환합니다.
 
 ```java
 class BatchResponseImpl implements BatchResponse {
