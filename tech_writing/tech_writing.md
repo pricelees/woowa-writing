@@ -560,7 +560,7 @@ public void sendMulticastMessage(List<String> tokens) {
 
 성능에서는 당연하게도 차이가 클 수 밖에 없는데, 1,000개의 토큰을 담아 알림을 보내는 상황으로 Message와 MulticastMessage의 차이를 생각해보면 다음과 같습니다. 
 
-- Message를 이용하는 경우 토큰의 갯수 만큼의 객체 생성과 네트워크 요청이 필요합니다. 즉 1,000개의 토큰이라면 1,000개의 Message 객체 생성과 1,000번의 네트워크 요청이 필요합니다.
+- Message를 이용하는 경우 토큰의 수 만큼의 객체 생성과 네트워크 요청이 필요합니다. 즉 1,000개의 토큰이라면 1,000개의 Message 객체 생성과 1,000번의 네트워크 요청이 필요합니다.
 - MulticastMessage는 500개씩 전송을 보낼 수 있으므로, 두 개의 MulticastMessage 객체 생성과 두 번의 네트워크 요청이 필요합니다.
 
 실제로 1000개의 토큰으로 테스트를 했을 때, 100배 이상의 시간 차이가 나는 것을 확인할 수 있었습니다.
@@ -653,8 +653,6 @@ private boolean isRemovable(SendResponse sendResponse) {
 
 응답의 에러 코드를 확인한 뒤, UNREGISTERED 인 토큰을 찾아 제거하는 코드입니다. 응답에 해당되는 토큰을 꺼내기 위해 인덱스로 루프를 돌려야 하고, 저는 IntStream을 이용했습니다. 
 
-> IntStream을 사용할 때는 주의가 필요합니다. List<String>에서 토큰을 지우거나 하는 과정으로 BatchResponse.getResponses()와 갯수가 불일치하는 경우 예외가 발생할 수 있습니다. 
-> 
 
 ```java
 private void sendAllRetryableTokens(List<SendResponse> responses, List<String> tokens) {
