@@ -1,14 +1,14 @@
 # Springboot와 Firebase를 이용하여 웹 알림 구현하기
 
-특정 서비스를 만들 때 가장 중요한 것 중 하나는 **알림 기능**인 것 같습니다. 
+우아한테크코스에서의 프로젝트 기간동안 **하나의 모임을 성사시키는 서비스(이하 모우다)** 를 만들었습니다.
+개인적으로 이 서비스에서 가장 필요한 기능 중 하나는 **알림 기능**이라고 생각했습니다. 모임이 잘 만들어져도 사용자가 모른다면 아무 의미도 없기 때문이죠. 
 
-프로젝트 기간동안 **하나의 모임을 성사시키는 서비스**(=모우다)를 만들었는데, 모든 기능이 정상적으로 작동해도 사용자가 이를 모른다면 아무 의미가 없을 것이기에 **알림 기능**은 꼭 필요한 기능이었습니다.  
-
-이번 글에서는 모우다 서비스의 웹 알림 기능 구현에 사용한 **Firebase Cloud Message**(이하 FCM)를 소개하고, **백엔드에서의 구현 방법**을 간단한 예시 코드와 함께 살펴보겠습니다.
-
+그래서 모우다 팀에서도 알림 기능을, 특히 이번 프로젝트가 웹 프로젝트이기에 **웹 푸시 알림**을 도입했고, 이번 글에서는 이 기능의 구현에 사용된  **Firebase Cloud Message**(이하 FCM)를 소개한 뒤
+**백엔드에서의 구현 방법**을 간단한 예시 코드와 함께 소개하겠습니다. 
 
 > 본문에 작성된 코드는 실제 모우다 서비스의 코드가 아닌 예시를 위해 간단하게 작성한 코드입니다.
-예시 코드는 설명이 목적이므로 추상화, 메서드 분리 등의 과정을 적용하지 않고 가급적 풀어서 작성하였습니다.
+> 
+> 예시 코드는 설명이 목적이므로 추상화, 메서드 분리 등의 과정을 적용하지 않고 가급적 풀어서 작성하였습니다.
 >
 
 ## Firebase Cloud Messaging 이란?
@@ -34,11 +34,9 @@
 
 ![fcm_흐름도](images/fcm_flow.png)
 
-FCM 토큰은 **앱 인스턴스**마다 고유하다고 하는데요, 여기서의 앱 인스턴스는 하나의 애플리케이션에 해당됩니다.
+FCM 토큰은 **앱 인스턴스**마다 고유하다고 하는데요, 여기서의 앱 인스턴스는 하나의 애플리케이션에 해당됩니다. 즉 웹 푸시 알림의 경우 같은 기기라도 서로 다른 브라우저마다 각각의 토큰이 부여되니 한 명의 회원이 여러 개의 FCM 토큰을 발급받을 수 있습니다. 
 
-즉 웹 푸시 알림의 경우를 생각하면 같은 기기라도 서로 다른 브라우저마다 각각의 토큰이 부여되고, 따라서 한 명의 회원이 여러 개의 FCM 토큰을 발급받을 수 있습니다. 
-
-이 과정대로라면 백엔드 서버에서 할 일은 다음과 같습니다.
+위의 과정에서 백엔드에서 해야 할 일은 다음과 같습니다.
 
 1. 클라이언트가 토큰을 보내면 **사용자 정보와 함께 데이터베이스에 저장**하는 API를 만든다.
 2. 특정 이벤트(모임 생성, 댓글, 채팅)에 대한 처리를 하고, 이 이벤트에 대한 알림을 받을 회원의 토큰을 조회한다.
@@ -245,9 +243,10 @@ public record FcmTokenRequest(
 }
 ```
 
-`POST /tokens/fcm`  요청을 받아 토큰을 등록하는 API를 만듭니다. `userId`는 로그인 된 회원의 ID값이고, 인터셉터에서 처리한다고 가정하겠습니다.
+`POST /tokens/fcm`  요청을 받아 토큰을 등록하는 API를 만듭니다. 저는 인터셉터를 이용한다고 생각하고 userId를 넣었는데, 회원 테이블에서 회원을 식별하기 위한 데이터를 넣으면 된다고 생각하시면 됩니다!
 
-클라이언트에서는 **DOMContentLoaded** 등을 통해 메인 페이지에 들어가면 이 API를 호출하도록 구현할 수 있습니다!
+> 클라이언트에서는 **DOMContentLoaded** 등을 통해 메인 페이지에 들어가면 이 API를 호출하도록 구현할 수 있습니다.
+> 
 
 ```java
 @Service
@@ -309,9 +308,8 @@ private void deactiveOrDelete(FcmTokenEntity tokenEntity) {
 }
 ```
 
-저는 **매월 1일**에 확인할 예정이기에 `cron = 0 0 0 1 * ?`  으로 지정하였습니다. 토큰이 만료된 경우 삭제하고, 토큰이 갱신된지 한 달 이상이라면 비활성화 상태로 지정합니다.
-
-토큰의 만료(expire)는 비활성화된 날짜 기준으로 270일이 경과한 경우이기에, 토큰을 비활성화 하더라도 날짜는 최신으로 업데이트를 해줘야 합니다!
+저는 **매월 1일**에 확인할 예정이기에 `cron = 0 0 0 1 * ?`  으로 지정하였습니다. 토큰이 만료된 경우 삭제하고, 토큰이 갱신된지 한 달 이상이라면 비활성화 상태로 지정하는데, 여기서 주의할 점은
+ 토큰의 만료(expire)는 비활성화된 날짜 기준으로 270일이 경과한 경우이기에, 토큰을 비활성화 하더라도 날짜는 최신으로 업데이트를 해줘야 합니다!
 
 여기까지 하면 토큰에 대한 설정은 끝났고, 이제 메시지를 보내는 과정을 다뤄보겠습니다.
 
@@ -341,32 +339,29 @@ private void deactiveOrDelete(FcmTokenEntity tokenEntity) {
 
 ```json
 {
-  "name": string,
-  "data": {
-    string: string,
-    ...
-  },
-  "notification": {
-    object (Notification)
-  },
-  "android": {
-    object (AndroidConfig)
-  },
-  "webpush": {
-    object (WebpushConfig)
-  },
-  "apns": {
-    object (ApnsConfig)
-  },
-  "fcm_options": {
-    object (FcmOptions)
-  },
-
-  // Union field target can be only one of the following:
-  "token": string,
-  "topic": string,
-  "condition": string
-  // End of list of possible types for union field target.
+   "name": "",
+   "data": {
+   },
+   "notification": {
+      "object": "Notification 객체"
+   },
+   "android": {
+      "object": "AndroidConfig 객체"
+   },
+   "webpush": {
+      "object": "WebpushConfig 객체"
+   },
+   "apns": {
+      "object": "ApnsConfig 객체"
+   },
+   "fcm_options": {
+      "object": "FcmOptions 객체"
+   },
+   // Union field target can be only one of the following:
+   "token": string,
+   "topic": string,
+   "condition": string
+   // End of list of possible types for union field target.
 }
 ```
 
@@ -374,11 +369,11 @@ private void deactiveOrDelete(FcmTokenEntity tokenEntity) {
 
 **Notification**
 
-```java
+```json
 {
-  "title": string,
-  "body": string,
-  "image": string
+  "title": "string",
+  "body": "string",
+  "image": "string"
 }
 ```
 
@@ -399,16 +394,16 @@ Notification notification = Notification.builder()
 
 **fcm_options**
 
-```java
+```json
 // 모든 플랫폼에 적용되는 fcm_options
 {
-  "analytics_label": string
+  "analytics_label": "string"
 }
 
 // 웹 푸시에서의 fcm_options
 {
-  "link": string,
-  "analytics_label": string
+  "link": "string",
+  "analytics_label": "string"
 }
 ```
 
@@ -428,21 +423,19 @@ WebpushFcmOptions webpushOptions = WebpushFcmOptions.withLink("https 경로");
 
 **webpush**
 
-```java
+```json
 {
   "headers": {
-    string: string,
-    ...
+    "key": "value"
   },
   "data": {
-    string: string,
-    ...
+    "key": "value"
   },
   "notification": {
-    object
+    "object": "WebpushNotification 객체"
   },
   "fcm_options": {
-    object (WebpushFcmOptions)
+    "object": "WebpushFcmOptions 객체"
   }
 }
 ```
@@ -488,6 +481,9 @@ String response = FirebaseMessaging.getInstance().send(message);
 ```
 
 Message 객체는, 이전에 만든 객체들에 setToken()으로 단일 토큰을 지정하여 전송합니다. 전송에 성공하면 문자열 응답을 보내주는데, 응답은 `projects/{project_id}/messages/{message_id}` 형식으로 이루어져 있습니다.
+
+> 개별 메시지를 식별할 수는 있지만, 사실 위 응답만으로 할 수 있는게 크게 없는 것 같아요.
+> 
 
 2. **MulticastMessage 객체 생성 및 전송**
 
@@ -544,7 +540,7 @@ private List<List<String>> partitionTokensByBatch(List<String> tokens) {
 }
 ```
 
-주의하실 점은 MulticastMessage 전송에는 **최소 1개의 토큰이 포함**되어야 하는데요, 따라서 불필요한 작업을 피하기 위해, 아래 코드와 같이 토큰이 비어있는 경우는 바로 종료하도록 할 수 있습니다. 
+주의하실 점은 MulticastMessage 전송에는 **최소 1개의 토큰이 포함**되어야 하는데요, 따라서 불필요한 작업과 예외 처리등을 피하기 위해, 아래 코드와 같이 토큰이 비어있는 경우는 바로 종료하도록 할 수 있습니다. 
 
 ```java
 public void sendMulticastMessage(List<String> tokens) {
@@ -562,7 +558,7 @@ public void sendMulticastMessage(List<String> tokens) {
 2. 여러 회원에게 메시지를 보내는 경우도 있다. 즉 1번과 더불어 모든 알림 전송은 **여러 개의 토큰**을 대상으로 한다.
 3. 여러 개의 토큰에 알림을 보낼 때는 MulticastMessage가 성능상 유리하다.
 
-성능에서는 당연하게도 차이가 클 수 밖에 없는데, 1,000개의 토큰을 담아 알림을 보내는 상황을 가정해보면
+성능에서는 당연하게도 차이가 클 수 밖에 없는데, 1,000개의 토큰을 담아 알림을 보내는 상황으로 Message와 MulticastMessage의 차이를 생각해보면 다음과 같습니다. 
 
 - Message를 이용하는 경우 토큰의 갯수 만큼의 객체 생성과 네트워크 요청이 필요합니다. 즉 1,000개의 토큰이라면 1,000개의 Message 객체 생성과 1,000번의 네트워크 요청이 필요합니다.
 - MulticastMessage는 500개씩 전송을 보낼 수 있으므로, 두 개의 MulticastMessage 객체 생성과 두 번의 네트워크 요청이 필요합니다.
@@ -577,19 +573,25 @@ public void sendMulticastMessage(List<String> tokens) {
 
 메시지 전송에 실패하면 FirebaseMessagingException이 발생합니다. 이 예외는 `MessagingErrorcode` 라는 에러 코드 Enum을 가지고 있는데요, Enum에 있는 각 예외 코드에 대한 설명은 [공식 문서](https://firebase.google.com/docs/reference/fcm/rest/v1/ErrorCode?hl=ko)에서 확인하실 수 있습니다.
 
-이전 코드에서는 작성하지 않았지만 send 또는 sendEachForMulticast는 **throws 또는 try-catch를 이용한 예외 처리가 필요**한데요, 자세히 작성하면 분량이 꽤나 길어져서 간단한 가이드라인만 제시 해 보겠습니다.
+이전 코드에서는 작성하지 않았지만 send 또는 `sendEachForMulticast()`는 **throws 또는 try-catch를 이용한 예외 처리가 필요**한데요, 예외 처리에서 해야할 일은 다음과 같습니다.  
 
-1. 위에서 간단하게 작성했는데, 토큰에 문제가 있으면 **UNREGISTERED** 라는 에러 코드로 응답합니다. 에러 코드가 이 코드이면 토큰을 삭제하겠습니다.
+1. 토큰에 문제가 있으면 **UNREGISTERED** 라는 에러 코드로 응답이 오고, 에러 코드가 이 코드이면 토큰을 DB에서 삭제하겠습니다.
 2. [재시도 처리 공식문서](https://firebase.google.com/docs/cloud-messaging/scale-fcm?hl=ko#handling-retries)에서 제안하는 방법대로, 429와 500번대 오류가 발생하면 재시도합니다.
+
+우선 본격적인 예외 처리를 다루기 전에 MulticastMessage 전송 시의 응답 객체인 BatchResponse를 살펴보겠습니다. 
 
 ### BatchResponse
 
-이전에 간단하게 언급했던 BatchResponse는, 모든 전송에 대한 응답을 가지고 있고, 다음의 특징을 가집니다.
+이전에 간단하게 언급했던 BatchResponse는 모든 전송에 대한 응답을 가지고 있고, 다음의 특징을 가집니다.
 
-1. BatchResponse의 순서는 MulticastMessage를 만들 때 지정한 **토큰의 순서와 동일**합니다.
-    - 따라서, BatchResponse의 인덱스를 이용하면 성공 / 실패한 토큰만을 조회할 수 있습니다.
-2. getSuccessCount(), getFailureCount()를 통해 성공 / 실패 횟수를 알 수 있습니다.
-3. getResponses() 를 통해 List<SendResponse>를 얻을 수 있고, SendResponse안에는 개별 메시지의 id와 예외 발생시의 예외 정보가 들어있습니다.
+1. BatchResponse.getResponses()를 통해 각각의 메시지에 대한 응답이 담긴 List<SendResponse>를 얻을 수 있습니다.
+   - 개별 메시지의 정보는 SendResponse 객체에서 얻을 수 있습니다. (예외 코드, 성공 / 실패 여부 등)
+
+2. 이 리스트의 순서는 MulticastMessage를 만들 때 지정한 **토큰의 순서와 동일**합니다.
+    - 따라서, 이 리스트에서의 인덱스를 이용하여 성공 / 실패한 토큰만을 조회할 수 있습니다.
+   
+3. getSuccessCount(), getFailureCount()를 통해 성공 / 실패 횟수를 알 수 있습니다.
+   - getFailureCount()의 결과가 0이라면 재시도 처리를 할 필요가 없습니다.
 
 이제 BatchResponse를 이용한 예외 처리 과정을 본격적으로 다뤄보겠습니다. 
 
@@ -649,7 +651,7 @@ private boolean isRemovable(SendResponse sendResponse) {
 }
 ```
 
-응답의 에러 코드를 확인한 뒤, UNREGISTERED 인 토큰을 찾아 제거하는 코드입니다. 응답에 해당되는 토큰을 꺼내기 위해 IntStream 을 이용하여 인덱스로 루프를 돌려야 합니다.
+응답의 에러 코드를 확인한 뒤, UNREGISTERED 인 토큰을 찾아 제거하는 코드입니다. 응답에 해당되는 토큰을 꺼내기 위해 인덱스로 루프를 돌려야 하고, 저는 IntStream을 이용했습니다. 
 
 > IntStream을 사용할 때는 주의가 필요합니다. List<String>에서 토큰을 지우거나 하는 과정으로 BatchResponse.getResponses()와 갯수가 불일치하는 경우 예외가 발생할 수 있습니다. 
 > 
@@ -661,13 +663,12 @@ private void sendAllRetryableTokens(List<SendResponse> responses, List<String> t
 }
 ```
 
-재시도 처리는 MessagingErrorCode가 429(QUOTA_EXCEEDED) 일 때와 INTERNAL(500) / UNAVAILABLE(503)인 경우로 나눌 수 있습니다. 토큰 분류는 이전에 토큰을 삭제할 때 했던 방법과 동일합니다.
-재시도 처리는 내용이 많기도 하고, 이는 기능 구현보다는 기능 고도화에 가깝다고 생각하여 간단한 가이드만 작성해 보겠습니다.
+재시도 처리는 MessagingErrorCode가 `429(QUOTA_EXCEEDED)` 일 때와 `INTERNAL(500)` / `UNAVAILABLE(503)`인 경우로 나눌 수 있는데요, 재시도 처리는 내용이 많기도 하고, 이는 구현보다는 고도화에 가깝다고 생각하여 간단한 가이드만 작성해 보겠습니다.
 
 1. 429 에러인 경우 retry-after 헤더에 있는 시간 뒤에 재시도 요청을 보내고, 값이 없으면 기본값은 60초입니다.
 
 ```java
-sendResponse.getException().getHttpResponse().getHeaders().get("retry-after");
+sendResponse.getException().getHttpResponse().getHeaders().get("Retry-After");
 ```
 
 retry-after 값은 `SendResponse`  객체에 위 코드를 적용하여 얻을 수 있습니다.
@@ -685,17 +686,17 @@ retry-after 값은 `SendResponse`  객체에 위 코드를 적용하여 얻을 �
 )
 ```
 
-지수 백오프 방법은 **Spring Retry**나 ScheduledExecutorService를 이용하여 구현할 수 있습니다! 
+지수 백오프 방법은 **Spring Retry**나 ScheduledExecutorService 를 이용하여 구현할 수 있습니다! 
 
 ## 마무리
 
 이번 글에서는 FCM과 토큰 관리, 메시지 전송, 그리고 예외 처리에 대해 알아보았습니다.
 
-알림 기능을 빠르게 구현하고자 한다면 메시지 전송 부분만 참고하시면 됩니다. 알림은 구현 자체만 보면 어렵지는 않으나, `잘` 보내기 위해서는 수많은 고민이 필요합니다. 이 글에서 다룬 토큰 관리, 예외 처리도 그렇고 **트랜잭션, 이벤트별 전송 전략, 의존성, 동기 / 비동기** 등의 애플리케이션 자체에 대한 고민도 필요합니다.
+알림 기능을 빠르게 구현하고자 한다면 메시지 전송 부분만 참고하시면 됩니다. 알림은 구현 자체만 보면 어렵지는 않으나, **잘** 보내기 위해서는 수많은 고민이 필요합니다. 예를 들면 앞에서 다룬 토큰 관리, 예외 처리도 그렇고 **트랜잭션, 이벤트별 전송 전략, 의존성, 동기 / 비동기** 등이 있습니다.
 
 사용자가 많거나, 사용자가 적어도 수 많은 알림을 보내는 상황이 아니라면 예외 처리와 같은 부분은 생략하고 실제 전송 부분만 구현한 뒤 고도화하는 과정을 거치는게 더 의미가 있다고 생각합니다.
 
-> 저희 서비스에서는 초창기 알림 기능을 도입할 때 알림 전송에 실패해도 기존 비즈니스 로직은 유지(=트랜잭션 커밋)하는 정도도 구현하지 않고, 가장 기본적인 전송 기능만 구현했음에도 알림에서의 예외가 거의 발생하지 않았습니다!
+> 저희 서비스에서는 초창기 알림 기능을 도입할 때 알림 전송에 실패해도 기존 비즈니스 로직은 유지(=트랜잭션 커밋)하는 정도도 구현하지 않고, 가장 기본적인 전송 기능만 구현했음에도 알림에서의 예외가 발생하지 않았습니다!
 > 
 
-이 글이 초기의 알림 기능 구현에 도움이 되었으면 좋겠습니다. 긴 글 읽느라 고생하셨습니다. 감사합니다!
+이 글이 초기의 알림 기능 구현에 도움이 되었으면 좋겠고, 긴 글 읽느라 고생 많으셨습니다. 감사합니다!
